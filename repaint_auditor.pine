@@ -1,5 +1,5 @@
 //@version=6
-indicator("Repaint Auditor: Live Flicker Counter and request.security A/B", shorttitle = "REPAINT-AUDIT", overlay = true, max_labels_count = 500)
+indicator("Repaint Auditor: Live Flicker Counter and request.security A/B", shorttitle = "REPAINT-AUDIT", overlay = true)
 
 // Repaint Auditor
 // 1) Watches any plot (chosen as a source) tick by tick and counts how often it
@@ -69,23 +69,20 @@ if auditing
 // ───────────────────────── request.security A/B ─────────────────────────
 htfOk = timeframe.in_seconds(htf) > timeframe.in_seconds(timeframe.period)
 pick() => htfField == "open" ? open : htfField == "high" ? high : htfField == "low" ? low : close
-honest = request.security(syminfo.tickerid, htf, pick()[1], lookahead = barmerge.lookahead_on)
-deflt  = request.security(syminfo.tickerid, htf, pick(),    lookahead = barmerge.lookahead_off)
-leak   = request.security(syminfo.tickerid, htf, pick(),    lookahead = barmerge.lookahead_on)
+pickPrev() => htfField == "open" ? open[1] : htfField == "high" ? high[1] : htfField == "low" ? low[1] : close[1]
+honest = request.security(syminfo.tickerid, htf, pickPrev(), lookahead = barmerge.lookahead_on)
+deflt  = request.security(syminfo.tickerid, htf, pick(),     lookahead = barmerge.lookahead_off)
+leak   = request.security(syminfo.tickerid, htf, pick(),     lookahead = barmerge.lookahead_on)
 
 // History: leakAhead counts bars where the no-offset lookahead_on form shows an HTF value
 // that the lookahead_off form does not have yet (future data). Equal values by coincidence
-// make it a lower bound. defaultAhead counts bars where the default form already switched
-// while the honest form has not (last chart bar of each HTF period).
+// make it a lower bound.
 var int histBars = 0
 var int leakAhead = 0
-var int defaultAhead = 0
 if not barstate.isrealtime and htfOk and not na(honest)
     histBars += 1
     if leak != deflt
         leakAhead += 1
-    if deflt != honest
-        defaultAhead += 1
 
 // Live intrabar changes of each form.
 varip float lastH = na
@@ -132,7 +129,10 @@ warnBg = color.new(color.orange, 65)
 badBg = color.new(color.red, 65)
 
 setCell(int col, int row, string txt, color bg = na) =>
-    table.cell(tbl, col, row, txt, text_color = color.new(color.gray, 0), text_size = size.small, text_halign = text.align_left, bgcolor = na(bg) ? cellBg : bg)
+    table.cell(tbl, col, row, txt, text_color = chart.fg_color, text_size = size.small, text_halign = text.align_left, bgcolor = na(bg) ? cellBg : bg)
+
+// Merged rows are merged once: merging cells that are already merged on every realtime tick is avoided.
+varip bool merged = false
 
 if barstate.islast
     waiting = liveBars == 0
@@ -144,7 +144,6 @@ if barstate.islast
     setCell(0, 1, "Your plot", hdrBg)
     setCell(1, 1, "", hdrBg)
     setCell(2, 1, "", hdrBg)
-    table.merge_cells(tbl, 0, 1, 2, 1)
 
     setCell(0, 2, "Bars with intrabar changes")
     setCell(1, 2, waiting ? waitTxt : str.tostring(changeBars) + " of " + str.tostring(liveBars))
@@ -162,7 +161,6 @@ if barstate.islast
     setCell(0, 6, "request.security A/B · " + htf + " · " + htfField, hdrBg)
     setCell(1, 6, "", hdrBg)
     setCell(2, 6, "", hdrBg)
-    table.merge_cells(tbl, 0, 6, 2, 6)
 
     setCell(0, 7, "Form", hdrBg)
     setCell(1, 7, "History", hdrBg)
@@ -182,4 +180,8 @@ if barstate.islast
     setCell(0, 11, "Live counts start at the first full bar after load. Reload clears them.", hdrBg)
     setCell(1, 11, "", hdrBg)
     setCell(2, 11, "", hdrBg)
-    table.merge_cells(tbl, 0, 11, 2, 11)
+    if not merged
+        table.merge_cells(tbl, 0, 1, 2, 1)
+        table.merge_cells(tbl, 0, 6, 2, 6)
+        table.merge_cells(tbl, 0, 11, 2, 11)
+        merged := true

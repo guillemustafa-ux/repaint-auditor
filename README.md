@@ -13,9 +13,9 @@ Open-source TradingView indicator (Pine Script v6) that measures repainting inst
    - `lookahead_off` (the default);
    - `lookahead_on` without `[1]` (returns future data on historical bars).
 
-   The history column counts bars where the forms disagree. The live column counts intrabar changes of each form.
+   The history column shows on how many past bars the form without `[1]` already held a future value. The live column counts intrabar changes of each form. The `[1]` + `lookahead_on` form should stay at 0 live changes when the chart timeframe divides the higher timeframe evenly (for example 1m and 60m).
 
-The A/B section uses the script's own OHLC (chosen with a string input), not the external source, because a `request.*()` call that receives another script's plot evaluates it on the chart symbol, not on the requested context.
+The A/B section uses the script's own OHLC (chosen with a string input), not the external source, because a `request.*()` call that receives another script's plot evaluates it with the chart symbol's data, not the requested symbol's.
 
 ## Files
 

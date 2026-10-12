@@ -9,9 +9,9 @@ Repaint Auditor measures whether a plot changes while a bar is still forming. Yo
 It also runs a second check on request.security. The same higher timeframe value is requested in three forms, and the script compares them on history and live.
 
 WHAT IS ORIGINAL HERE
-Most repaint checks are visual: you watch a signal and decide by eye. This script turns that into counts. Two ideas are combined. First, a tick-by-tick audit window built with varip state that skips the bar in progress when the chart loads, because that bar was not observed from its first tick. Second, a side by side comparison of three request.security forms: [1] with lookahead_on, lookahead_off, and lookahead_on without the offset. The history column counts bars where the forms disagree, and the live column counts how often each form changes while the higher timeframe bar develops.
+Checking for repainting by eye means watching a signal and remembering what it did. This script turns that into counts. Two ideas are combined. First, a tick-by-tick audit window built with varip state that skips the bar in progress when the chart loads, because that bar was not observed from its first tick. Second, a side by side comparison of three request.security forms: [1] with lookahead_on, lookahead_off, and lookahead_on without the offset. The history column shows on how many past bars the form without the offset already held a future value, and the live column counts how often each form changes while the higher timeframe bar develops.
 
-The comparison uses the script's own open, high, low or close, selected by an input. It does not feed the external source into request.security, because a request that receives another script's plot evaluates that series on the chart symbol, not on the requested context.
+The comparison uses the script's own open, high, low or close, selected by an input. It does not feed the external source into request.security, because a request that receives another script's plot evaluates that series with the chart symbol's data, not the requested symbol's.
 
 HOW TO USE IT
 1. Add the indicator to a chart with live data, for example a liquid futures contract on the 1 minute timeframe during market hours.
@@ -24,7 +24,7 @@ HOW TO READ THE TABLE
 Live bars audited: bars that were fully observed in realtime since load. Ticks: executions counted inside the audit window.
 Your plot: bars with intrabar changes (k of N), total intrabar changes, ghost signals, and signals that were still on at the bar close.
 request.security A/B: one row per form. The History column describes what each form shows on past bars. For the form without the offset it reports on how many bars it already showed a value that the lookahead_off form did not have yet, as "at least" because equal values by coincidence are not counted. The Live column counts intrabar changes of each form.
-Expected behavior from the documentation: the [1] with lookahead_on form changes only when a new higher timeframe period starts, which is always a new chart bar, so its live count should stay at 0. The other two forms can change while the higher timeframe bar develops.
+Expected behavior from the documentation: the [1] with lookahead_on form changes only when a new higher timeframe period starts. When the chart timeframe divides the higher timeframe evenly (for example 1 and 60 minutes), that is always a new chart bar, so its live count should stay at 0. The other two forms can change while the higher timeframe bar develops.
 
 WHAT IT CANNOT SEE
 Historical bars carry no tick data, so the intrabar behavior of a plot on past bars cannot be reconstructed. After a reload, bars that were realtime become historical and only their final value remains; the ghost marks and live counts disappear. That disappearance is the repaint being shown. The script also cannot judge the logic behind a plot, and it does not detect repainting done only through drawing objects.
