@@ -30,9 +30,9 @@ WHAT IT CANNOT SEE
 Historical bars carry no tick data, so the intrabar behavior of a plot on past bars cannot be reconstructed. After a reload, bars that were realtime become historical and only their final value remains; the ghost marks and live counts disappear. That disappearance is the repaint being shown. The script also cannot judge the logic behind a plot, and it does not detect repainting done only through drawing objects.
 
 LIMITATIONS
-Live counts depend on how many ticks the data feed delivers; a batched feed can show fewer intermediate changes. The state uses varip, which behaves like var on historical bars and is kept across ticks only on realtime bars, so results can differ after a reload. The history figure for the no-offset form is a lower bound. The script reports counts, not a verdict on whether a strategy is good or bad, and it is not financial advice.
+Live counts depend on how many ticks the data feed delivers; a batched feed can show fewer intermediate changes. The state uses varip, which behaves like var on historical bars and is kept across ticks only on realtime bars, so results can differ after a reload. Keep the chart tab visible while auditing: a browser that puts a background tab to sleep makes TradingView recalculate the script when you return, which clears the live counts like a reload. The history figure for the no-offset form is a lower bound. The script reports counts, not a verdict on whether a strategy is good or bad, and it is not financial advice.
 
-The chart shows [SYMBOL] on the [TF] timeframe with the default inputs.
+The chart shows MNQ1! on the 1 minute timeframe with live data. The pane below the chart is a small test helper, not part of this script: it plots 1 while the bar is green (close > open) and 0 otherwise, and it is selected as "Plot to audit". A bar that trades above its open and then closes at or below it is a ghost signal. All other inputs are at their defaults.
 ---
 
 ## Publishing checklist
