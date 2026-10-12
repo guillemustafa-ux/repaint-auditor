@@ -2,6 +2,8 @@
 
 Open-source TradingView indicator (Pine Script v6) that measures repainting instead of guessing it.
 
+Published on TradingView: https://www.tradingview.com/script/7USFvRmd-Repaint-Auditor-Live-Flicker-Counter-and-request-security-A-B/
+
 ## What it measures
 
 1. **Live flicker counter.** Pick any other indicator's plot as the source. While the chart runs in realtime, the script observes it tick by tick and counts:
