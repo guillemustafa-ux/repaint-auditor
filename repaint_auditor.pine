@@ -1,0 +1,185 @@
+//@version=6
+indicator("Repaint Auditor: Live Flicker Counter and request.security A/B", shorttitle = "REPAINT-AUDIT", overlay = true, max_labels_count = 500)
+
+// Repaint Auditor
+// 1) Watches any plot (chosen as a source) tick by tick and counts how often it
+//    changes inside a bar, and how often it was "on" during the bar but "off"
+//    at the close (a "ghost" signal).
+// 2) Compares three request.security forms on the same higher timeframe value.
+// Live counts only exist for bars observed tick by tick since the chart was
+// loaded. History carries no tick data, so reloading clears the live counts.
+
+// ───────────────────────── Inputs ─────────────────────────
+src = input.source(close, "Plot to audit", group = "Plot to audit", tooltip = "Pick another indicator's plot. A value that is not na and not zero counts as 'on' for the signal view.")
+tolTicks = input.float(0, "Ignore intrabar changes up to (ticks)", minval = 0, step = 1, group = "Plot to audit", tooltip = "Changes smaller than or equal to this many minimum ticks are not counted.")
+
+htf = input.timeframe("60", "Higher timeframe", group = "request.security A/B", tooltip = "Must be above the chart timeframe.")
+htfField = input.string("close", "HTF value", options = ["open", "high", "low", "close"], group = "request.security A/B", tooltip = "Which OHLC value of the higher timeframe bar is requested.")
+showLines = input.bool(true, "Plot the three HTF series", group = "request.security A/B")
+
+markGhosts = input.bool(true, "Mark ghost signals on the chart", group = "Display")
+tablePos = input.string("Top right", "Table position", options = ["Top right", "Bottom right", "Top left", "Bottom left"], group = "Display")
+
+// ───────────────────────── Helpers ─────────────────────────
+isOn(float v) => not na(v) and v != 0
+changed(float a, float b, float tol) => na(a) != na(b) or (not na(a) and not na(b) and math.abs(a - b) > tol)
+
+// ───────────────────────── Audit window ─────────────────────────
+// The bar in progress when the chart loads was not observed from its first tick, so it is skipped.
+varip int skipBar = na
+if barstate.isrealtime and na(skipBar)
+    skipBar := bar_index
+auditing = barstate.isrealtime and not na(skipBar) and bar_index > skipBar
+
+// ───────────────────────── Plot audit state ─────────────────────────
+varip int liveBars = 0
+varip int ticks = 0
+varip int barChanges = 0
+varip int changeBars = 0
+varip int changesTotal = 0
+varip int ghosts = 0
+varip int onAtClose = 0
+varip float prevVal = na
+varip bool onSeen = false
+varip bool ghostBar = false
+
+if auditing
+    if barstate.isnew
+        barChanges := 0
+        onSeen := isOn(src)
+        prevVal := src
+        ghostBar := false
+    else
+        if changed(src, prevVal, tolTicks * syminfo.mintick)
+            barChanges += 1
+        onSeen := onSeen or isOn(src)
+        prevVal := src
+    ticks += 1
+    if barstate.isconfirmed
+        liveBars += 1
+        changesTotal += barChanges
+        if barChanges > 0
+            changeBars += 1
+        if isOn(src)
+            onAtClose += 1
+        else if onSeen
+            ghosts += 1
+            ghostBar := true
+
+// ───────────────────────── request.security A/B ─────────────────────────
+htfOk = timeframe.in_seconds(htf) > timeframe.in_seconds(timeframe.period)
+pick() => htfField == "open" ? open : htfField == "high" ? high : htfField == "low" ? low : close
+honest = request.security(syminfo.tickerid, htf, pick()[1], lookahead = barmerge.lookahead_on)
+deflt  = request.security(syminfo.tickerid, htf, pick(),    lookahead = barmerge.lookahead_off)
+leak   = request.security(syminfo.tickerid, htf, pick(),    lookahead = barmerge.lookahead_on)
+
+// History: leakAhead counts bars where the no-offset lookahead_on form shows an HTF value
+// that the lookahead_off form does not have yet (future data). Equal values by coincidence
+// make it a lower bound. defaultAhead counts bars where the default form already switched
+// while the honest form has not (last chart bar of each HTF period).
+var int histBars = 0
+var int leakAhead = 0
+var int defaultAhead = 0
+if not barstate.isrealtime and htfOk and not na(honest)
+    histBars += 1
+    if leak != deflt
+        leakAhead += 1
+    if deflt != honest
+        defaultAhead += 1
+
+// Live intrabar changes of each form.
+varip float lastH = na
+varip float lastD = na
+varip float lastL = na
+varip int chgH = 0
+varip int chgD = 0
+varip int chgL = 0
+if auditing and htfOk
+    if barstate.isnew
+        lastH := honest
+        lastD := deflt
+        lastL := leak
+    else
+        if changed(honest, lastH, 0)
+            chgH += 1
+        if changed(deflt, lastD, 0)
+            chgD += 1
+        if changed(leak, lastL, 0)
+            chgL += 1
+        lastH := honest
+        lastD := deflt
+        lastL := leak
+
+// ───────────────────────── Plots ─────────────────────────
+plot(showLines and htfOk ? honest : na, "HTF honest ([1] + lookahead_on)", color = color.teal, style = plot.style_stepline, linewidth = 2)
+plot(showLines and htfOk ? deflt  : na, "HTF default (lookahead_off)", color = color.orange, style = plot.style_stepline)
+plot(showLines and htfOk ? leak   : na, "HTF leak (lookahead_on, no offset)", color = color.red, style = plot.style_stepline)
+plotshape(markGhosts and ghostBar, "Ghost signal", shape.xcross, location.abovebar, color.red, size = size.tiny, text = "ghost")
+
+// ───────────────────────── Table ─────────────────────────
+tPos = switch tablePos
+    "Top right" => position.top_right
+    "Bottom right" => position.bottom_right
+    "Top left" => position.top_left
+    => position.bottom_left
+
+var table tbl = table.new(tPos, 3, 12, border_width = 1)
+
+cellBg = color.new(color.gray, 85)
+hdrBg = color.new(color.gray, 65)
+okBg = color.new(color.green, 70)
+warnBg = color.new(color.orange, 65)
+badBg = color.new(color.red, 65)
+
+setCell(int col, int row, string txt, color bg = na) =>
+    table.cell(tbl, col, row, txt, text_color = color.new(color.gray, 0), text_size = size.small, text_halign = text.align_left, bgcolor = na(bg) ? cellBg : bg)
+
+if barstate.islast
+    waiting = liveBars == 0
+    waitTxt = "waiting for a full live bar"
+    setCell(0, 0, "REPAINT AUDITOR", hdrBg)
+    setCell(1, 0, waiting ? waitTxt : "Live bars audited: " + str.tostring(liveBars), hdrBg)
+    setCell(2, 0, waiting ? waitTxt : "Ticks: " + str.tostring(ticks), hdrBg)
+
+    setCell(0, 1, "Your plot", hdrBg)
+    setCell(1, 1, "", hdrBg)
+    setCell(2, 1, "", hdrBg)
+    table.merge_cells(tbl, 0, 1, 2, 1)
+
+    setCell(0, 2, "Bars with intrabar changes")
+    setCell(1, 2, waiting ? waitTxt : str.tostring(changeBars) + " of " + str.tostring(liveBars))
+    setCell(2, 2, "")
+    setCell(0, 3, "Intrabar changes, total")
+    setCell(1, 3, waiting ? waitTxt : str.tostring(changesTotal))
+    setCell(2, 3, "")
+    setCell(0, 4, "Ghost signals (on intrabar, off at close)")
+    setCell(1, 4, waiting ? waitTxt : str.tostring(ghosts), not waiting and ghosts > 0 ? badBg : na)
+    setCell(2, 4, "")
+    setCell(0, 5, "Signals on at bar close")
+    setCell(1, 5, waiting ? waitTxt : str.tostring(onAtClose))
+    setCell(2, 5, "")
+
+    setCell(0, 6, "request.security A/B · " + htf + " · " + htfField, hdrBg)
+    setCell(1, 6, "", hdrBg)
+    setCell(2, 6, "", hdrBg)
+    table.merge_cells(tbl, 0, 6, 2, 6)
+
+    setCell(0, 7, "Form", hdrBg)
+    setCell(1, 7, "History", hdrBg)
+    setCell(2, 7, "Live intrabar changes", hdrBg)
+
+    notOk = "pick a timeframe above the chart's"
+    setCell(0, 8, "[1] + lookahead_on")
+    setCell(1, 8, htfOk ? "last confirmed HTF bar" : notOk)
+    setCell(2, 8, not htfOk ? notOk : waiting ? waitTxt : str.tostring(chgH), htfOk and not waiting and chgH == 0 ? okBg : na)
+    setCell(0, 9, "lookahead_off")
+    setCell(1, 9, htfOk ? "new value at HTF close" : notOk)
+    setCell(2, 9, not htfOk ? notOk : waiting ? waitTxt : str.tostring(chgD), htfOk and not waiting and chgD > 0 ? warnBg : na)
+    setCell(0, 10, "lookahead_on, no [1]")
+    setCell(1, 10, htfOk ? "future value on at least " + str.tostring(leakAhead) + " of " + str.tostring(histBars) + " bars" : notOk)
+    setCell(2, 10, not htfOk ? notOk : waiting ? waitTxt : str.tostring(chgL), htfOk and not waiting and chgL > 0 ? warnBg : na)
+
+    setCell(0, 11, "Live counts start at the first full bar after load. Reload clears them.", hdrBg)
+    setCell(1, 11, "", hdrBg)
+    setCell(2, 11, "", hdrBg)
+    table.merge_cells(tbl, 0, 11, 2, 11)

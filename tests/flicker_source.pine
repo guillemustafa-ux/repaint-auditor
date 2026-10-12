@@ -1,0 +1,5 @@
+//@version=6
+indicator("Flicker source (test helper)", overlay = false)
+// 1 while the bar is green, 0 otherwise. A bar that trades above its open and
+// closes at or below it produces a "ghost" signal in the auditor.
+plot(close > open ? 1 : 0, "Green bar flag")
