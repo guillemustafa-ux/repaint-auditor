@@ -36,6 +36,10 @@ The A/B section uses the script's own OHLC (chosen with a string input), not the
    - the history column shows the leak on at least ~95% of bars for 1m vs 60m.
 5. Reload the chart. The ghost marks and live counts disappear, because those bars are now historical and only their final value remains. That disappearance is the repaint being demonstrated.
 
+Result on 12 Oct 2026 (MNQ1! 1-minute, delayed CME feed, helper as the audited plot): 18 live bars and 1,356 ticks audited; 14 of 18 bars changed intrabar (82 changes); 4 ghost signals, marked on the chart. Live intrabar changes: `[1] + lookahead_on` 0, `lookahead_off` 553, `lookahead_on, no [1]` 553 (the two forms only differ on history). History: the no-offset form showed a future value on at least 21,428 of 21,790 bars. After a reload the 4 ghost marks were gone and the counts restarted.
+
+Keep the chart tab visible during the test: a browser that puts a background tab to sleep makes TradingView recalculate the script when you return, which clears the live counts like a reload.
+
 ## Limitations
 
 - Live counts only cover bars observed tick by tick since the chart was loaded. The bar in progress at load time is skipped. Reloading clears them (the state uses `varip`, which is not preserved across reloads).
